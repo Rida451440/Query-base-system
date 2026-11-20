@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Admin - {{ org.name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+    <header class="topbar">
+        <a class="brand" href="/">
+            {% if logo %}
+            <img src="{{ logo }}" alt="{{ org.name }}" class="brand-logo"
+                onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
+            {% endif %}
+            <span class="brand-text" {% if logo %}style="display:none"{% endif %}>{{ org.name }}</span>
+        </a>
+        <a class="header-phone" href="/">Back to assistant</a>
+    </header>
+
+    <main class="admin-wrap">
+
+        {% if message %}
+        <p class="admin-message">{{ message }}</p>
+        {% endif %}
+
+        <section class="panel">
+            <h2>Bot ki maloomat</h2>
+            <p class="muted">
+                Bot in teen jagahon se jawab banata hai. Admin notes ko sab se zyada tarjeeh milti hai.
+            </p>
+
+            <div class="stats">
+                <div><strong>{{ counts.get('website', 0) }}</strong><span>Website se (crawler)</span></div>
+                <div><strong>{{ counts.get('seed', 0) }}</strong><span>Shuruati data</span></div>
+                <div><strong>{{ counts.get('admin', 0) }}</strong><span>Admin notes</span></div>
+            </div>
+
+            <p class="muted">
+                Jawab ka tareeqa:
+                {% if ai_enabled %}
+                <strong>AI model (Claude) ke saath</strong>: saaf aur natural jawab.
+                {% else %}
+                <strong>Bina AI ke</strong>: website ka milta hua hissa seedha dikhaya jata hai.
+                Behtar jawab ke liye ANTHROPIC_API_KEY set karein (README dekhein).
+                {% endif %}
+            </p>
+
+            <form method="post" action="{{ url_for('admin_refresh') }}" class="admin-form">
+                <input type="hidden" name="key" value="{{ key }}">
+                <button type="submit" class="primary" onclick="this.textContent='Parh raha hoon, thora intezar...'">Refresh website data</button>
+                <span class="muted">Website ke pages dobara parhta hai (1 se 2 minute lag sakte hain).</span>
+            </form>
+        </section>
+
+        <section class="panel">
+            <h2>Extra information add karein</h2>
+            <p class="muted">
+                Jo maloomat website par nahi (jaise discount, admission ki taareekh, naya course) wo yahan likhein.
+                Restart ki zaroorat nahi. Ek note mein aik hi baat likhein, poore jumlay mein.
+            </p>
+
+            <form method="post" action="{{ url_for('admin_add_note') }}" class="admin-form">
+                <input type="hidden" name="key" value="{{ key }}">
+                <label for="text">Maloomat</label>
+                <textarea id="text" name="text" rows="3" required
+                    placeholder="Misal: Students ko CCNA course par 10% discount milta hai."></textarea>
+                <button type="submit" class="primary">Save</button>
+            </form>
+
+            {% if notes %}
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Saved notes</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for note in notes %}
+                        <tr>
+                            <td>{{ note[1] }}</td>
+                            <td>
+                                <form method="post" action="{{ url_for('admin_delete_note', note_id=note[0]) }}">
+                                    <input type="hidden" name="key" value="{{ key }}">
+                                    <button type="submit" class="small">Remove</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </section>
+
+        <section class="panel">
+            <h2>Unanswered queries</h2>
+            <p class="muted">Ye wo sawal hain jin ka bot jawab nahi de saka. Inhein dekh kar upar extra information add karein.</p>
+
+            {% if unanswered %}
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Query</th>
+                            <th>Score</th>
+                            <th>Time</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in unanswered %}
+                        <tr>
+                            <td>{{ item[1] }}</td>
+                            <td>{{ item[2] }}</td>
+                            <td>{{ item[3] }}</td>
+                            <td>
+                                <form method="post" action="{{ url_for('admin_delete', item_id=item[0]) }}">
+                                    <input type="hidden" name="key" value="{{ key }}">
+                                    <button type="submit" class="small">Remove</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p>Abhi koi unanswered query nahi hai.</p>
+            {% endif %}
+        </section>
+
+    </main>
+
+</body>
+
+</html>

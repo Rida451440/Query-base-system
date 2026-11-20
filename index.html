@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ org.name }} - Assistant</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+    <header class="topbar">
+        <a class="brand" href="/">
+            {% if logo %}
+            <img src="{{ logo }}" alt="{{ org.name }}" class="brand-logo"
+                onerror="this.style.display='none'; this.nextElementSibling.style.display='inline';">
+            {% endif %}
+            <span class="brand-text" {% if logo %}style="display:none"{% endif %}>{{ org.name }}</span>
+        </a>
+
+        {% if org.phone %}
+        <a class="header-phone" href="tel:{{ org.phone|replace('-', '')|replace(' ', '') }}">
+            <span>Call us</span> {{ org.phone }}
+        </a>
+        {% endif %}
+    </header>
+
+
+    <main class="page">
+
+        <div class="intro">
+            <h1>How can we help you?</h1>
+            <p>Ask about courses, fees, schedules or our {{ org.campus }}.</p>
+        </div>
+
+        <section class="chat" id="chat" aria-label="Chat assistant">
+
+            <div class="chat-head">
+                <div class="chat-title">
+                    <strong>{{ org.name }}</strong>
+                    <span class="status"><i></i>Assistant online</span>
+                </div>
+                <button type="button" id="clear-btn" class="text-btn">Clear chat</button>
+            </div>
+
+            <div id="chat-box" aria-live="polite">
+                <div class="bot-message">Hello! Welcome to {{ org.name }}. How can I help you?</div>
+            </div>
+
+            <div class="suggestions">
+                <button type="button" class="chip" data-q="What is the fee of the AI course?">AI course fee</button>
+                <button type="button" class="chip" data-q="Python course kab start hogi?">Python schedule</button>
+                <button type="button" class="chip" data-q="Rawalpindi campus ka address kya hai?">Campus address</button>
+                <button type="button" class="chip" data-q="How can I apply for a course?">How to apply</button>
+            </div>
+
+            <div class="input-area">
+                <input
+                    type="text"
+                    id="query"
+                    placeholder="Type your question..."
+                    autocomplete="off"
+                    aria-label="Your question"
+                >
+
+                <button type="button" id="mic-btn" class="icon-btn" aria-label="Ask by voice" title="Ask by voice">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+                </button>
+
+                <button type="button" id="send-btn" class="icon-btn send" aria-label="Send" title="Send">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+                </button>
+            </div>
+
+        </section>
+
+        <p class="note">Fees and schedules can change. Please confirm with the campus before registering.</p>
+
+    </main>
+
+
+    <footer class="footer">
+        <div class="footer-inner">
+            {% if org.address %}<span>{{ org.address }}</span>{% endif %}
+            {% if org.phone %}<span>{{ org.phone }}</span>{% endif %}
+            {% if org.whatsapp %}<span>WhatsApp {{ org.whatsapp }}</span>{% endif %}
+            <span>{{ org.email }}</span>
+            <span>{{ org.hours_en }}</span>
+        </div>
+    </footer>
+
+
+    <script>
+        const chatBox = document.getElementById("chat-box");
+        const queryInput = document.getElementById("query");
+        const sendBtn = document.getElementById("send-btn");
+        const micBtn = document.getElementById("mic-btn");
+        const WELCOME = "Hello! Welcome to " + {{ org.name|tojson }} + ". How can I help you?";
+
+        // Text nodes use hote hain, is liye user ka likha hua text kabhi HTML ban kar nahi chalta (XSS se bachao).
+        // Sirf http/https links ko clickable banaya jata hai.
+        function addMessage(text, className) {
+            const div = document.createElement("div");
+            div.className = className;
+
+            text.split(/(https?:\/\/[^\s,]*[^\s,.;:!?)])/g).forEach(function (part) {
+                if (/^https?:\/\//.test(part)) {
+                    const link = document.createElement("a");
+                    link.href = part;
+                    link.textContent = part;
+                    link.target = "_blank";
+                    link.rel = "noopener noreferrer";
+                    div.appendChild(link);
+                } else {
+                    div.appendChild(document.createTextNode(part));
+                }
+            });
+
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function showTyping() {
+            const div = document.createElement("div");
+            div.className = "bot-message typing";
+            div.id = "typing";
+            div.setAttribute("aria-label", "Assistant is typing");
+            div.innerHTML = "<span></span><span></span><span></span>";
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function hideTyping() {
+            const typing = document.getElementById("typing");
+            if (typing) typing.remove();
+        }
+
+        async function sendQuery(speak = false) {
+            const query = queryInput.value.trim();
+            if (!query) return;
+
+            addMessage(query, "user-message");
+            queryInput.value = "";
+            showTyping();
+            sendBtn.disabled = true;
+
+            let answer;
+            try {
+                const result = await fetch("/ask", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ query: query })
+                });
+                if (!result.ok) throw new Error("Server error");
+                const data = await result.json();
+                answer = data.answer;
+            } catch (error) {
+                answer = "Sorry, something went wrong. Please check your connection and try again.";
+            }
+
+            hideTyping();
+            addMessage(answer, "bot-message");
+            sendBtn.disabled = false;
+            queryInput.focus();
+
+            if (speak) speakAnswer(answer);
+        }
+
+        function startListening() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+            if (!SpeechRecognition) {
+                alert("Voice input is not supported in this browser. Please use Google Chrome.");
+                return;
+            }
+
+            const recognition = new SpeechRecognition();
+            recognition.lang = "en-US";
+
+            recognition.onstart = function () { micBtn.classList.add("listening"); };
+            recognition.onend = function () { micBtn.classList.remove("listening"); };
+
+            recognition.onresult = function (event) {
+                queryInput.value = event.results[0][0].transcript;
+                sendQuery(true);
+            };
+
+            recognition.onerror = function () {
+                alert("Could not hear you. Please try again.");
+            };
+
+            recognition.start();
+        }
+
+        function speakAnswer(text) {
+            if (!("speechSynthesis" in window)) return;
+            const speech = new SpeechSynthesisUtterance(text);
+            speech.lang = "en-US";
+            window.speechSynthesis.speak(speech);
+        }
+
+        function clearChat() {
+            if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+            chatBox.innerHTML = "";
+            addMessage(WELCOME, "bot-message");
+        }
+
+        sendBtn.addEventListener("click", () => sendQuery());
+        micBtn.addEventListener("click", startListening);
+        document.getElementById("clear-btn").addEventListener("click", clearChat);
+
+        // Suggestion buttons: click karte hi sawal bhej do
+        document.querySelectorAll(".chip").forEach(function (chip) {
+            chip.addEventListener("click", function () {
+                queryInput.value = chip.dataset.q;
+                sendQuery();
+            });
+        });
+
+        // Enter dabane se sawal chala jaye
+        queryInput.addEventListener("keydown", function (event) {
+            if (event.key === "Enter") {
+                event.preventDefault();
+                sendQuery();
+            }
+        });
+    </script>
+
+</body>
+
+</html>
